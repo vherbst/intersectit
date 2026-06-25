@@ -28,17 +28,17 @@
 #---------------------------------------------------------------------
 
 from math import sqrt, acos, atan2, pi, ceil, fabs, cos, sin
-from qgis.core import QgsGeometry, QgsPoint
+from qgis.core import QgsGeometry, QgsPointXY
 
 
 class Arc():
     def __init__(self, p1, p2, p3=None):
         if p3 is None:
-            p3 = QgsPoint(p2)
+            p3 = QgsPointXY(p2)
             p2 = self.createMiddlePoint(p1, p3)
-        self.p1 = QgsPoint(p1)
-        self.p2 = QgsPoint(p2)
-        self.p3 = QgsPoint(p3)
+        self.p1 = QgsPointXY(p1)
+        self.p2 = QgsPointXY(p2)
+        self.p3 = QgsPointXY(p3)
 
     def setPoint(self, point):
         self.p2 = point
@@ -46,8 +46,8 @@ class Arc():
     def createMiddlePoint(self, p1, p3):
         direction = [-(p1.y()-p3.y()),  p1.x()-p3.x()]
         length = sqrt(p1.sqrDist(p3))
-        return QgsPoint((p1.x()+p3.x())/2 + direction[0] * .2 * length,
-                        (p1.y()+p3.y())/2 + direction[1] * .2 * length)
+        return QgsPointXY((p1.x()+p3.x())/2 + direction[0] * .2 * length,
+                          (p1.y()+p3.y())/2 + direction[1] * .2 * length)
 
     def geometry(self):
         # code taken from cadtools/circulararc.py
@@ -58,7 +58,7 @@ class Arc():
         center = self.getArcCenter(self.p1, self.p2, self.p3)
         if center is None:
             coords.append(self.p3)
-            return QgsGeometry().fromPolyline(coords)
+            return QgsGeometry.fromPolylineXY(coords)
         cx = center.x()
         cy = center.y()
         px = self.p2.x()
@@ -97,13 +97,13 @@ class Arc():
                 angle -= 2*pi
             x = cx + r * cos(angle)
             y = cy + r * sin(angle)
-            coords.append(QgsPoint(x, y))
+            coords.append(QgsPointXY(x, y))
             if angle < a2 < angle+arcIncr:
                 coords.append(self.p2)
             if angle > a2 > angle+arcIncr:
                 coords.append(self.p2)
         coords.append(self.p3)
-        return QgsGeometry().fromPolyline(coords)
+        return QgsGeometry.fromPolylineXY(coords)
 
     def getArcCenter(self, p1, p2, p3):
         bx = p1.x()
@@ -120,6 +120,6 @@ class Arc():
             det = 1 / det
             x = (bc * (cy - dy) - cd * (by - cy)) * det
             y = ((bx - cx) * cd - (cx - dx) * bc) * det
-            return QgsPoint(x, y)
+            return QgsPointXY(x, y)
         except ZeroDivisionError:
             return None

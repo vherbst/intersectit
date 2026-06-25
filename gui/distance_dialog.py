@@ -27,8 +27,8 @@
 #
 # ---------------------------------------------------------------------
 
-from PyQt4.QtCore import pyqtSignature
-from PyQt4.QtGui import QDialog
+from qgis.PyQt.QtCore import pyqtSlot
+from qgis.PyQt.QtWidgets import QDialog
 from qgis.gui import QgsRubberBand
 
 from ..core.mysettings import MySettings
@@ -54,12 +54,12 @@ class DistanceDialog(QDialog, Ui_place_distance):
         self.precision.setValue(distance.precision)
         self.observation.selectAll()
 
-    @pyqtSignature("on_observation_valueChanged(double)")
+    @pyqtSlot(float)
     def on_observation_valueChanged(self, v):
         self.distance.observation = v
         self.rubber.setToGeometry(self.distance.geometry(), None)
 
-    @pyqtSignature("on_precision_valueChanged(double)")
+    @pyqtSlot(float)
     def on_precision_valueChanged(self, v):
         self.distance.precision = v
 

@@ -27,11 +27,12 @@
 #
 #---------------------------------------------------------------------
 
-from qgis.core import QgsPoint, QgsGeometry
+from qgis.core import QgsPointXY, QgsGeometry
 from math import pi, cos, sin
 
-from mysettings import MySettings
-from observation import Observation
+from .mysettings import MySettings
+from .observation import Observation
+
 
 class Distance(Observation):
     def __init__(self, iface, point, observation):
@@ -40,6 +41,6 @@ class Distance(Observation):
 
     def geometry(self):
         # trace circle at distance from point
-        return QgsGeometry().fromPolyline([QgsPoint(self.point.x() + self.observation * cos(pi/180*a),
-                                                    self.point.y() + self.observation * sin(pi/180*a))
+        return QgsGeometry.fromPolylineXY([QgsPointXY(self.point.x() + self.observation * cos(pi/180*a),
+                                                      self.point.y() + self.observation * sin(pi/180*a))
                                            for a in range(0, 361, 3)])

@@ -3,8 +3,10 @@
 name=Intersect It
 description=Intersect It is a QGIS plugin to construct points by intersection.
 about=Intersect It is a QGIS plugin to construct points by with simple intersection from any layer of the map or by advanced intersection using 2 or more observations (distances and orientations). Advanced intersection is perfomed using a Least-Squares approach. Dimensions can also be saved from observations.
-version=3.5.6
-qgisMinimumVersion=2.8
+version=4.0.0
+qgisMinimumVersion=3.40
+qgisMaximumVersion=4.99
+supportsQt6=True
 
 experimental=False
 icon=icons/intersectit-128.png
@@ -14,5 +16,5 @@ homepage=http://3nids.github.io/intersectit
 tracker=https://github.com/3nids/intersectit/issues
 repository=https://github.com/3nids/intersectit
 
-author=Denis Rouzaud
-email=denis.rouzaud@gmail.com
+author=Denis Rouzaud, Volkmar Herbst
+email=volkmar.herbst@gmx.de

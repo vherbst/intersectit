@@ -31,7 +31,7 @@ from math import pow, sqrt, sin, cos, pi
 import numpy as np
 from numpy import linalg as la
 
-from qgis.core import QgsPoint
+from qgis.core import QgsPointXY
 
 deg2rad = pi/180
 
@@ -111,7 +111,7 @@ class LeastSquares():
         p2 = sqrt(Qxx[1][1])
         # residuals -Qll*B'*(P * (A* dx(iN)+w)) !!! ToBeChecked todo !!!
         v = np.dot(-Qll, np.dot(B.T, np.dot(P, np.dot(A, dx) + w)))
-        self.solution = QgsPoint(x0[0], x0[1])
+        self.solution = QgsPointXY(float(x0[0]), float(x0[1]))
 
         self.report += "\n"
         self.report += "\nSolution:\t%13.3f\t%13.3f" % (x0[0], x0[1])

@@ -28,9 +28,9 @@
 # ---------------------------------------------------------------------
 
 
-from qgis.core import QgsPoint, QgsGeometry, QgsFeature
+from qgis.core import QgsPointXY, QgsGeometry, QgsFeature
 from datetime import datetime
-from memory_layers import MemoryLayers
+from .memory_layers import MemoryLayers
 
 
 class Observation():
@@ -42,7 +42,7 @@ class Observation():
         # generate ID;
         self.id = datetime.now().strftime("%Y%m%d%H%M%S%f")
 
-        # obsservations are stored in the lineLayer layer attributes:
+        # observations are stored in the lineLayer layer attributes:
         #   0: id
         #   1: observation type
         #   2: x
@@ -51,7 +51,7 @@ class Observation():
         #   5: precision
 
         self.obsType = obsType
-        self.point = QgsPoint(point)
+        self.point = QgsPointXY(point)
         self.observation = observation
         self.precision = precision
 
@@ -61,7 +61,7 @@ class Observation():
     def save(self):
         # observation
         f = QgsFeature()
-        fields = self.lineLayer.dataProvider().fields()
+        fields = self.lineLayer.fields()
         f.setFields(fields)
         f["id"] = self.id
         f["type"] = self.obsType
@@ -70,22 +70,18 @@ class Observation():
         f["observation"] = self.observation
         f["precision"] = self.precision
         f.setGeometry(self.geometry())
-        ok, l = self.lineLayer.dataProvider().addFeatures([f])
+        self.lineLayer.dataProvider().addFeatures([f])
         self.lineLayer.updateExtents()
-        self.lineLayer.setCacheImage(None)
         self.lineLayer.triggerRepaint()
-        self.lineLayer.featureAdded.emit(l[0].id())  # emit signal so feature is added to snapping index
 
         # center
         f = QgsFeature()
-        fields = self.pointLayer.dataProvider().fields()
+        fields = self.pointLayer.fields()
         f.setFields(fields)
         f["id"] = self.id
-        f.setGeometry(QgsGeometry().fromPoint(self.point))
-        ok, l = self.pointLayer.dataProvider().addFeatures([f])
+        f.setGeometry(QgsGeometry.fromPointXY(self.point))
+        self.pointLayer.dataProvider().addFeatures([f])
         self.pointLayer.updateExtents()
-        self.pointLayer.setCacheImage(None)
         self.pointLayer.triggerRepaint()
-        self.pointLayer.featureAdded.emit(l[0].id())  # emit signal so feature is added to snapping index
 
 

@@ -27,11 +27,11 @@
 #
 #---------------------------------------------------------------------
 
-from qgis.core import QgsPoint, QgsGeometry
+from qgis.core import QgsPointXY, QgsGeometry
 from math import cos, sin, pi
 
-from mysettings import MySettings
-from observation import Observation
+from .mysettings import MySettings
+from .observation import Observation
 
 
 class Orientation(Observation):
@@ -44,4 +44,4 @@ class Orientation(Observation):
     def geometry(self):
         x = self.point.x() + self.length * cos((90-self.observation)*pi/180)
         y = self.point.y() + self.length * sin((90-self.observation)*pi/180)
-        return QgsGeometry().fromPolyline([self.point, QgsPoint(x, y)])
+        return QgsGeometry.fromPolylineXY([self.point, QgsPointXY(x, y)])

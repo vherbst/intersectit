@@ -14,9 +14,11 @@
 ####################################################
 # CONFIGURATION
 
-# QGIS DIR
-QGIS_DIR=$(HOME)/.qgis2
-QGIS_BUILD_DIR=/home/rouzaudd/opt/QGIS2/build
+# QGIS profile path. Linux default: $HOME/.local/share/QGIS/QGIS3/profiles/default
+# macOS default:  $HOME/Library/Application\ Support/QGIS/QGIS3/profiles/default
+# Override on the command line:  make deploy QGIS_DIR=/path/to/profile
+QGIS_DIR=$(HOME)/.local/share/QGIS/QGIS3/profiles/default
+QGIS_BUILD_DIR=
 
 # i18n
 LN_DIR=i18n
@@ -35,38 +37,36 @@ PLUGINNAME =$(shell basename $(CURDIR))
 VERSION = `cat $(PLUGINNAME)/metadata.txt | grep version | sed 's/version=//'`
 
 PY_FILES = $(filter-out ui_%.py, $(wildcard *.py) $(wildcard **/*.py))
-EXTRAS = metadata.txt resources.qrc
+EXTRAS = metadata.txt
 
 UI_SOURCES=$(wildcard *.ui) $(wildcard **/*.ui)
 UI_FILES=$(join $(dir $(UI_SOURCES)), $(notdir $(UI_SOURCES:%.ui=%.py)))
 
-RC_SOURCES=$(wildcard *.qrc) $(wildcard **/*.qrc)
-RC_FILES=$(join $(dir $(RC_SOURCES)), $(notdir $(RC_SOURCES:%.qrc=%_rc.py)))
-
 LN_SOURCES=$(wildcard *.ts) $(wildcard **/*.ts)
 LN_FILES=$(join $(dir $(LN_SOURCES)), $(notdir $(LN_SOURCES:%.ts=%.qm)))
 
-GEN_FILES=${UI_FILES} ${RC_FILES}
+GEN_FILES=${UI_FILES}
 
 all: $(GEN_FILES)
 
+# Use the QGIS-bundled PyQt to compile .ui files. pyuic emits
+# `from PyQt5 import ...` literally; rewrite it to `from qgis.PyQt` so the
+# generated module works under both PyQt5 (QGIS 3) and PyQt6 (QGIS 4).
 $(UI_FILES): %.py: %.ui
-	PYTHONPATH=$(PYTHONPATH):$(QGIS_BUILD_DIR)/output/python python -m qgis.PyQt.uic.pyuic -o $@ $<
-
-$(RC_FILES): %_rc.py: %.qrc
-	pyrcc4 -o $@ $<
+	python3 -m qgis.PyQt.uic.pyuic -o $@ $<
+	sed -i.bak -E 's/^from PyQt5( import|\.)/from qgis.PyQt\1/' $@ && rm -f $@.bak
 
 $(LN_FILES): %.qm: %.ts
-	lrelease-qt4 $<
+	lrelease $<
 
 clean:
 	rm -f $(GEN_FILES) *.pyc
 	find $(CURDIR) -iname "*.pyc" -delete
 
-compile: $(UI_FILES) $(RC_FILES) $(LN_FILES)
+compile: $(UI_FILES) $(LN_FILES)
 
 transup:
-	$(foreach lang,$(TRANSLATED_LANG),pylupdate4 -noobsolete $(UI_SOURCES) $(PY_FILES) -ts $(LN_DIR)/$(PLUGINNAME)_$(lang).ts;)
+	$(foreach lang,$(TRANSLATED_LANG),pylupdate5 -noobsolete $(UI_SOURCES) $(PY_FILES) -ts $(LN_DIR)/$(PLUGINNAME)_$(lang).ts;)
 
 deploy: compile transup
 	mkdir -p $(QGIS_DIR)/python/plugins/$(PLUGINNAME)

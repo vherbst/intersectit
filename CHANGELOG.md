@@ -1,4 +1,12 @@
 
+### 4.0.0 25.06.2026
+
+* port plugin to QGIS 3.40 LTS and QGIS 4 (single codebase via `qgis.PyQt`)
+* drop PyQt4 / Python 2 / QGIS 2 support
+* replace removed APIs (`QgsMapLayerRegistry`, `QgsSnapper`, `QgsMapCanvasSnapper`, `QGis.Point`, `QgsPoint` in 2D contexts) with their QGIS 3+ equivalents
+* drop the compiled Qt resource (`resources_rc.py`); icons are now loaded directly from the plugin's `icons/` directory
+* consolidate the duplicated snapping override into a single `gui/_snap.py` helper
+
 ### 3.5.6 26.09.2017
 
 * fix several release issues

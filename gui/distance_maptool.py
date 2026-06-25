@@ -27,15 +27,16 @@
 #
 #---------------------------------------------------------------------
 
-from PyQt4.QtCore import Qt
-from qgis.core import QGis, QgsGeometry, QgsPoint, QgsTolerance, QgsPointLocator, QgsVectorLayer, QgsSnappingUtils
-from qgis.gui import QgsRubberBand, QgsMapTool, QgsMapCanvasSnapper, QgsMessageBar
+from qgis.PyQt.QtCore import Qt
+from qgis.core import QgsWkbTypes, QgsPointLocator
+from qgis.gui import QgsRubberBand, QgsMapTool
 
 from ..core.mysettings import MySettings
 from ..core.distance import Distance
 from ..core.memory_layers import MemoryLayers
 
-from distance_dialog import DistanceDialog
+from ._snap import snap_to_vertex_all
+from .distance_dialog import DistanceDialog
 
 
 class DistanceMapTool(QgsMapTool):
@@ -48,7 +49,7 @@ class DistanceMapTool(QgsMapTool):
     def activate(self):
         QgsMapTool.activate(self)
         self.line_layer = MemoryLayers(self.iface).line_layer
-        self.rubber = QgsRubberBand(self.canvas(), QGis.Point)
+        self.rubber = QgsRubberBand(self.canvas(), QgsWkbTypes.PointGeometry)
         self.rubber.setColor(self.settings.value("rubberColor"))
         self.rubber.setIcon(self.settings.value("rubberIcon"))
         self.rubber.setIconSize(self.settings.value("rubberSize"))
@@ -75,7 +76,7 @@ class DistanceMapTool(QgsMapTool):
 
     def canvasMoveEvent(self, mouseEvent):
         match = self.snap_to_vertex(mouseEvent.pos())
-        self.rubber.reset(QGis.Point)
+        self.rubber.reset(QgsWkbTypes.PointGeometry)
         if match.type() == QgsPointLocator.Vertex and match.layer() != self.line_layer:
             self.rubber.addPoint(match.point())
         self.displaySnapInfo(match)
@@ -91,36 +92,10 @@ class DistanceMapTool(QgsMapTool):
         self.rubber.addPoint(point)
         distance = Distance(self.iface, point, 1)
         dlg = DistanceDialog(distance, self.canvas())
-        if dlg.exec_():
+        if dlg.exec():
             distance.save()
         self.rubber.reset()
 
     def snap_to_vertex(self, pos):
-        """ Temporarily override snapping config and snap to vertices and edges
-         of any editable vector layer, to allow selection of node for editing
-         (if snapped to edge, it would offer creation of a new vertex there).
-        """
-        map_point = self.toMapCoordinates(pos)
-        tol = QgsTolerance.vertexSearchRadius(self.canvas().mapSettings())
-        snap_type = QgsPointLocator.Type(QgsPointLocator.Vertex)
-
-        snap_layers = []
-        for layer in self.canvas().layers():
-            if not isinstance(layer, QgsVectorLayer):
-                continue
-            snap_layers.append(QgsSnappingUtils.LayerConfig(
-                layer, snap_type, tol, QgsTolerance.ProjectUnits))
-
-        snap_util = self.canvas().snappingUtils()
-        old_layers = snap_util.layers()
-        old_mode = snap_util.snapToMapMode()
-        old_inter = snap_util.snapOnIntersections()
-        snap_util.setLayers(snap_layers)
-        snap_util.setSnapToMapMode(QgsSnappingUtils.SnapAdvanced)
-        snap_util.setSnapOnIntersections(True)
-        m = snap_util.snapToMap(map_point)
-        snap_util.setLayers(old_layers)
-        snap_util.setSnapToMapMode(old_mode)
-        snap_util.setSnapOnIntersections(old_inter)
-        return m
+        return snap_to_vertex_all(self.canvas(), self.toMapCoordinates(pos), snap_on_intersections=True)
 

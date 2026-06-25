@@ -27,10 +27,11 @@
 #
 #---------------------------------------------------------------------
 
-from qgis.core import QGis, QgsFeature, QgsGeometry, QgsMapLayerRegistry, QgsTolerance, QgsPointLocator, QgsVectorLayer, QgsSnappingUtils
-from qgis.gui import QgsMapTool, QgsRubberBand, QgsMessageBar
+from qgis.core import Qgis, QgsFeature, QgsGeometry, QgsProject, QgsPointLocator, QgsWkbTypes
+from qgis.gui import QgsMapTool, QgsRubberBand
 
 from ..core.mysettings import MySettings
+from ._snap import snap_to_edge_all
 
 
 class SimpleIntersectionMapTool(QgsMapTool):
@@ -39,7 +40,7 @@ class SimpleIntersectionMapTool(QgsMapTool):
         self.mapCanvas = iface.mapCanvas()
         QgsMapTool.__init__(self, self.mapCanvas)
         self.settings = MySettings()
-        self.rubber = QgsRubberBand(self.mapCanvas, QGis.Point)
+        self.rubber = QgsRubberBand(self.mapCanvas, QgsWkbTypes.PointGeometry)
 
     def deactivate(self):
         self.rubber.reset()
@@ -53,7 +54,7 @@ class SimpleIntersectionMapTool(QgsMapTool):
 
     def canvasMoveEvent(self, mouseEvent):
         # put the observations within tolerance in the rubber band
-        self.rubber.reset(QGis.Point)
+        self.rubber.reset(QgsWkbTypes.PointGeometry)
         match = self.snap_to_intersection(mouseEvent.pos())
         if match.type() == QgsPointLocator.Vertex and match.layer() is None:
             self.rubber.addPoint(match.point())
@@ -68,56 +69,30 @@ class SimpleIntersectionMapTool(QgsMapTool):
         if layer is None:
             return
         f = QgsFeature()
-        initFields = layer.dataProvider().fields()
+        initFields = layer.fields()
         f.setFields(initFields)
         f.initAttributes(initFields.size())
-        f.setGeometry(QgsGeometry().fromPoint(match.point()))
-        layer.editBuffer().addFeature(f)
+        f.setGeometry(QgsGeometry.fromPointXY(match.point()))
+        layer.addFeature(f)
         layer.triggerRepaint()
 
     def snap_to_intersection(self, pos):
-        """ Temporarily override snapping config and snap to vertices and edges
-         of any editable vector layer, to allow selection of node for editing
-         (if snapped to edge, it would offer creation of a new vertex there).
-        """
-        map_point = self.toMapCoordinates(pos)
-        tol = QgsTolerance.vertexSearchRadius(self.canvas().mapSettings())
-        snap_type = QgsPointLocator.Type(QgsPointLocator.Edge)
-
-        snap_layers = []
-        for layer in self.canvas().layers():
-            if not isinstance(layer, QgsVectorLayer):
-                continue
-            snap_layers.append(QgsSnappingUtils.LayerConfig(
-                layer, snap_type, tol, QgsTolerance.ProjectUnits))
-
-        snap_util = self.canvas().snappingUtils()
-        old_layers = snap_util.layers()
-        old_mode = snap_util.snapToMapMode()
-        old_inter = snap_util.snapOnIntersections()
-        snap_util.setLayers(snap_layers)
-        snap_util.setSnapToMapMode(QgsSnappingUtils.SnapAdvanced)
-        snap_util.setSnapOnIntersections(True)
-        m = snap_util.snapToMap(map_point)
-        snap_util.setLayers(old_layers)
-        snap_util.setSnapToMapMode(old_mode)
-        snap_util.setSnapOnIntersections(old_inter)
-        return m
+        return snap_to_edge_all(self.canvas(), self.toMapCoordinates(pos), snap_on_intersections=True)
 
     def checkLayer(self):
         # check output layer is defined
         layerid = self.settings.value("simpleIntersectionLayer")
-        layer = QgsMapLayerRegistry.instance().mapLayer(layerid)
+        layer = QgsProject.instance().mapLayer(layerid)
         if not self.settings.value("simpleIntersectionWritePoint") or layer is None:
             self.iface.messageBar().pushMessage("Intersect It",
                                                 "You must define an output layer for simple intersections",
-                                                QgsMessageBar.WARNING, 3)
+                                                Qgis.Warning, 3)
             self.mapCanvas.unsetMapTool(self)
             return None
         if not layer.isEditable():
             self.iface.messageBar().pushMessage("Intersect It",
                                                 "The output layer <b>%s must be editable</b>" % layer.name(),
-                                                QgsMessageBar.WARNING, 3)
+                                                Qgis.Warning, 3)
             self.mapCanvas.unsetMapTool(self)
             return None
         return layer

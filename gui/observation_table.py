@@ -27,8 +27,8 @@
 #
 #---------------------------------------------------------------------
 
-from PyQt4.QtCore import Qt
-from PyQt4.QtGui import QTableWidget, QTableWidgetItem, QAbstractItemView, QDoubleSpinBox, QItemDelegate
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QDoubleSpinBox, QItemDelegate
 
 
 class ObservationTable(QTableWidget):

@@ -27,14 +27,14 @@
 #
 #---------------------------------------------------------------------
 
-from PyQt4.QtCore import Qt
-from qgis.core import QGis, QgsTolerance, QgsPointLocator, QgsSnappingUtils, QgsVectorLayer
+from qgis.PyQt.QtCore import Qt
 from qgis.gui import QgsRubberBand, QgsMapTool
 
 from ..core.orientation import Orientation
 from ..core.mysettings import MySettings
 
-from orientation_dialog import OrientationDialog
+from ._snap import snap_to_edge_all
+from .orientation_dialog import OrientationDialog
 
 
 class OrientationMapTool(QgsMapTool):
@@ -70,7 +70,7 @@ class OrientationMapTool(QgsMapTool):
             self.rubber.reset()
             return
         dlg = OrientationDialog(ori, self.rubber)
-        if dlg.exec_():
+        if dlg.exec():
             if ori.length != 0:
                 ori.save()
         self.rubber.reset()
@@ -91,33 +91,7 @@ class OrientationMapTool(QgsMapTool):
         return Orientation(self.iface, ve, az)
 
     def snap_to_segment(self, pos):
-        """ Temporarily override snapping config and snap to vertices and edges
-         of any editable vector layer, to allow selection of node for editing
-         (if snapped to edge, it would offer creation of a new vertex there).
-        """
-        map_point = self.toMapCoordinates(pos)
-        tol = QgsTolerance.vertexSearchRadius(self.canvas.mapSettings())
-        snap_type = QgsPointLocator.Type(QgsPointLocator.Edge)
-
-        snap_layers = []
-        for layer in self.canvas.layers():
-            if not isinstance(layer, QgsVectorLayer):
-                continue
-            snap_layers.append(QgsSnappingUtils.LayerConfig(
-                layer, snap_type, tol, QgsTolerance.ProjectUnits))
-
-        snap_util = self.canvas.snappingUtils()
-        old_layers = snap_util.layers()
-        old_mode = snap_util.snapToMapMode()
-        old_inter = snap_util.snapOnIntersections()
-        snap_util.setLayers(snap_layers)
-        snap_util.setSnapToMapMode(QgsSnappingUtils.SnapAdvanced)
-        snap_util.setSnapOnIntersections(False)
-        m = snap_util.snapToMap(map_point)
-        snap_util.setLayers(old_layers)
-        snap_util.setSnapToMapMode(old_mode)
-        snap_util.setSnapOnIntersections(old_inter)
-        return m
+        return snap_to_edge_all(self.canvas, self.toMapCoordinates(pos), snap_on_intersections=False)
 
 
 

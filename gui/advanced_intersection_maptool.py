@@ -27,17 +27,18 @@
 #
 # ---------------------------------------------------------------------
 
-from PyQt4.QtCore import QCoreApplication
-from PyQt4.QtGui import QMessageBox
-from qgis.core import QgsFeatureRequest, QgsFeature, QgsGeometry, QgsMapLayerRegistry, QgsPoint, QgsTolerance, QgsSnapper, QgsSnappingUtils, QgsPointLocator
-from qgis.gui import QgsMapTool, QgsRubberBand, QgsMessageBar
+from qgis.PyQt.QtCore import QCoreApplication
+from qgis.PyQt.QtWidgets import QMessageBox
+from qgis.core import (Qgis, QgsFeatureRequest, QgsFeature, QgsGeometry, QgsProject,
+                       QgsPointXY, QgsRectangle)
+from qgis.gui import QgsMapTool, QgsRubberBand
 
 from ..core.mysettings import MySettings
 from ..core.memory_layers import MemoryLayers
 from ..core.arc import Arc
 
-from my_settings_dialog import MySettingsDialog
-from intersection_dialog import IntersectionDialog
+from .my_settings_dialog import MySettingsDialog
+from .intersection_dialog import IntersectionDialog
 
 
 class AdvancedIntersectionMapTool(QgsMapTool):
@@ -47,6 +48,8 @@ class AdvancedIntersectionMapTool(QgsMapTool):
         QgsMapTool.__init__(self, self.mapCanvas)
         self.settings = MySettings()
         self.rubber = QgsRubberBand(self.mapCanvas)
+        self.line_layer = None
+        self.layerId = None
 
         self.tolerance = self.settings.value("selectTolerance")
         units = self.settings.value("selectUnits")
@@ -59,26 +62,21 @@ class AdvancedIntersectionMapTool(QgsMapTool):
         self.rubber.setColor(self.settings.value("rubberColor"))
         line_layer = MemoryLayers(self.iface).line_layer()
         # unset this tool if the layer is removed
-        line_layer.layerDeleted.connect(self.unsetMapTool)
+        line_layer.willBeDeleted.connect(self.unsetMapTool)
         self.layerId = line_layer.id()
-        # create snapper for this layer
-        self.snapLayer = QgsSnapper.SnapLayer()
-        self.snapLayer.mLayer = line_layer
-        self.snapLayer.mSnapTo = QgsSnapper.SnapToVertexAndSegment
-        self.snapLayer.mTolerance = self.settings.value("selectTolerance")
-        if self.settings.value("selectUnits") == "map":
-            self.snapLayer.mUnitType = QgsTolerance.MapUnits
-        else:
-            self.snapLayer.mUnitType = QgsTolerance.Pixels
+        self.line_layer = line_layer
 
     def unsetMapTool(self):
         self.mapCanvas.unsetMapTool(self)
 
     def deactivate(self):
         self.rubber.reset()
-        line_layer = QgsMapLayerRegistry.instance().mapLayer(self.layerId)
+        line_layer = QgsProject.instance().mapLayer(self.layerId)
         if line_layer is not None:
-            line_layer.layerDeleted.disconnect(self.unsetMapTool)
+            try:
+                line_layer.willBeDeleted.disconnect(self.unsetMapTool)
+            except TypeError:
+                pass
         QgsMapTool.deactivate(self)
 
     def canvasMoveEvent(self, mouseEvent):
@@ -93,21 +91,31 @@ class AdvancedIntersectionMapTool(QgsMapTool):
         point = self.toMapCoordinates(pos)
         self.doIntersection(point, observations)
 
+    def _tolerance_map_units(self):
+        tol = self.settings.value("selectTolerance")
+        if self.settings.value("selectUnits") == "pixels":
+            tol *= self.mapCanvas.mapUnitsPerPixel()
+        return tol
+
     def getFeatures(self, pixPoint):
-        snapper = QgsSnapper(self.mapCanvas.mapRenderer())
-        snapper.setSnapLayers([self.snapLayer])
-        snapper.setSnapMode(QgsSnapper.SnapWithResultsWithinTolerances)
-        ok, snappingResults = snapper.snapPoint(pixPoint, [])
-        # output snapped features
+        # collect features from the memory line layer whose geometry is within
+        # the configured tolerance of the cursor (in map units).
+        if self.line_layer is None or not self.line_layer.isValid():
+            return []
+        map_point = self.toMapCoordinates(pixPoint)
+        tol = self._tolerance_map_units()
+        bbox = QgsRectangle(map_point.x() - tol, map_point.y() - tol,
+                            map_point.x() + tol, map_point.y() + tol)
+        click_geom = QgsGeometry.fromPointXY(QgsPointXY(map_point))
         features = []
-        alreadyGot = []
-        for result in snappingResults:
-            featureId = result.snappedAtGeometry
-            f = QgsFeature()
-            if featureId not in alreadyGot:
-                if result.layer.getFeatures(QgsFeatureRequest().setFilterFid(featureId)).nextFeature(f) is not False:
-                    features.append(QgsFeature(f))
-                    alreadyGot.append(featureId)
+        seen = set()
+        request = QgsFeatureRequest().setFilterRect(bbox).setFlags(QgsFeatureRequest.ExactIntersect)
+        for f in self.line_layer.getFeatures(request):
+            if f.id() in seen:
+                continue
+            if click_geom.distance(f.geometry()) <= tol:
+                seen.add(f.id())
+                features.append(QgsFeature(f))
         return features
 
     def doIntersection(self, initPoint, observations):
@@ -116,7 +124,7 @@ class AdvancedIntersectionMapTool(QgsMapTool):
             return
         self.rubber.reset()
         self.dlg = IntersectionDialog(self.iface, observations, initPoint)
-        if not self.dlg.exec_() or self.dlg.solution is None:
+        if not self.dlg.exec() or self.dlg.solution is None:
             return
         intersectedPoint = self.dlg.solution
         self.saveIntersectionResult(self.dlg.report, intersectedPoint)
@@ -150,10 +158,11 @@ class AdvancedIntersectionMapTool(QgsMapTool):
         # save the intersection results
         if self.settings.value("advancedIntersectionWritePoint"):
             f = QgsFeature()
-            f.setGeometry(QgsGeometry().fromPoint(intersectedPoint))
+            f.setFields(intLayer.fields())
+            f.initAttributes(intLayer.fields().size())
             if self.settings.value("advancedIntersectionWriteReport"):
-                irep = intLayer.dataProvider().fieldNameIndex(reportField)
-                f.addAttribute(irep, report)
+                f[reportField] = report
+            f.setGeometry(QgsGeometry.fromPointXY(intersectedPoint))
             intLayer.dataProvider().addFeatures([f])
             intLayer.updateExtents()
             self.mapCanvas.refresh()
@@ -211,10 +220,10 @@ class AdvancedIntersectionMapTool(QgsMapTool):
         for obsType in obsTypes:
             if self.settings.value("dimension"+obsType+"Write"):
                 layerid = self.settings.value("dimension"+obsType+"Layer")
-                layer = QgsMapLayerRegistry.instance().mapLayer(layerid)
+                layer = QgsProject.instance().mapLayer(layerid)
                 if layer is None:
                     continue
-                initFields = layer.dataProvider().fields()
+                initFields = layer.fields()
                 features = []
                 for obs in observations:
                     if obs["type"] != obsType.lower():
@@ -226,19 +235,20 @@ class AdvancedIntersectionMapTool(QgsMapTool):
                         f[self.settings.value("dimension"+obsType+"ObservationField")] = obs["observation"]
                     if self.settings.value("dimension"+obsType+"PrecisionWrite"):
                         f[self.settings.value("dimension"+obsType+"PrecisionField")] = obs["precision"]
-                    p0 = QgsPoint(obs["x"], obs["y"])
+                    p0 = QgsPointXY(obs["x"], obs["y"])
                     p1 = intersectedPoint
                     if obs["type"] == "distance":
                         geom = Arc(p0, p1).geometry()
                     elif obs["type"] == "orientation":
-                        geom = QgsGeometry().fromPolyline([p0, p1])
+                        geom = QgsGeometry.fromPolylineXY([p0, p1])
                     else:
                         raise NameError("Invalid observation %s" % obs["type"])
                     f.setGeometry(geom)
                     features.append(QgsFeature(f))
-                if not layer.dataProvider().addFeatures(features):
+                ok, _added = layer.dataProvider().addFeatures(features)
+                if not ok:
                     self.iface.messageBar().pushMessage("Could not commit %s observations" % obsType,
-                                                        QgsMessageBar.CRITICAL)
+                                                        Qgis.Critical)
                 layer.updateExtents()
         self.mapCanvas.refresh()
 
@@ -247,28 +257,28 @@ class AdvancedIntersectionMapTool(QgsMapTool):
         # 1: layer exists
         # 2: does not exist, settings has been open, so loop once more (i.e. continue)
         # 3: does not exist, settings not edited, so cancel
-        layer = QgsMapLayerRegistry.instance().mapLayer(layerid)
+        layer = QgsProject.instance().mapLayer(layerid)
         if layer is not None:
             return 1, layer
 
         reply = QMessageBox.question(self.iface.mainWindow(), "Intersect It",
                                      message + " Would you like to open settings?", QMessageBox.Yes, QMessageBox.No)
         if reply == QMessageBox.Yes:
-            if MySettingsDialog().exec_():
-                return 2
-        return 3
+            if MySettingsDialog().exec():
+                return 2, None
+        return 3, None
 
     def checkFieldExists(self, layer, field, message):
         # returns:
         # 1: field exists
         # 2: does not exist, settings has been open, so loop once more (i.e. continue)
         # 3: does not exist, settings not edited, so cancel
-        if layer.dataProvider().fieldNameIndex(field) != -1:
+        if layer.fields().lookupField(field) != -1:
             return 1
 
         reply = QMessageBox.question(self.iface.mainWindow(), "Intersect It",
                                      message + " Would you like to open settings?", QMessageBox.Yes, QMessageBox.No)
         if reply == QMessageBox.Yes:
-            if MySettingsDialog().exec_():
+            if MySettingsDialog().exec():
                 return 2
         return 3

@@ -27,7 +27,7 @@
 #
 #---------------------------------------------------------------------
 
-from PyQt4.QtGui import QColor
+from qgis.PyQt.QtGui import QColor
 from ..qgissettingmanager import *
 
 pluginName = 'intersectit'
@@ -36,14 +36,19 @@ pluginName = 'intersectit'
 class MySettings(SettingManager):
     def __init__(self):
         SettingManager.__init__(self, pluginName)
-         
+
+        # UI language override. Empty string = follow QGIS locale.
+        # Values are two-letter codes matching i18n/intersectit_<code>.qm
+        # (e.g. "lo", "es", "en", "de", "fr"). Read once at plugin load.
+        self.add_setting( String( 'language', Scope.Global, '') )
+
         # Global settings
         self.add_setting( Double( 'obsDefaultPrecisionDistance', Scope.Global, .025) )
         self.add_setting( Double( 'obsDefaultPrecisionOrientation', Scope.Global, .5) )
         self.add_setting( Double( 'obsOrientationLength', Scope.Global, 4) )
         self.add_setting( Double( 'selectTolerance', Scope.Global, 7) )
         self.add_setting( String( 'selectUnits', Scope.Global, 'pixels') )
-        self.add_setting( Color( 'rubberColor', Scope.Global, QColor(0, 0, 255, 150), {'alpha': True}) )
+        self.add_setting( Color( 'rubberColor', Scope.Global, QColor(0, 0, 255, 150), allow_alpha=True) )
         self.add_setting( Double( 'rubberWidth', Scope.Global, 2) )
         self.add_setting( Integer( 'rubberSize', Scope.Global, 12) )
         self.add_setting( Integer( 'rubberIcon', Scope.Global, 4) )

@@ -27,12 +27,14 @@
 #
 # ---------------------------------------------------------------------
 
-from qgis.core import QgsMapLayerRegistry, QgsTolerance, QgsPointLocator, QgsSnappingUtils, QgsFeature, QgsFeatureRequest
-from qgis.gui import QgsRubberBand, QgsMapTool, QgsMessageBar
+from qgis.core import Qgis, QgsProject, QgsFeature, QgsFeatureRequest
+from qgis.gui import QgsRubberBand, QgsMapTool
 
 from ..core.arc import Arc
 from ..core.orientation_line import OrientationLine
 from ..core.mysettings import MySettings
+
+from ._snap import snap_to_edge_layer
 
 
 class DimensionEditMapTool(QgsMapTool):
@@ -53,19 +55,19 @@ class DimensionEditMapTool(QgsMapTool):
         self.lineRubber.setWidth(self.settings.value("rubberWidth"))
         self.lineRubber.setColor(self.settings.value("rubberColor"))
         layer_id = self.settings.value("dimension"+self.observationType+"Layer")
-        self.layer = QgsMapLayerRegistry.instance().mapLayer(layer_id)
+        self.layer = QgsProject.instance().mapLayer(layer_id)
         if self.layer is None:
             self.iface.messageBar().pushMessage("Intersect It", "Dimension layer must defined.",
-                                                QgsMessageBar.WARNING, 3)
+                                                Qgis.Warning, 3)
             self.canvas().unsetMapTool(self)
             return
         if not self.layer.isEditable():
             self.iface.messageBar().pushMessage("Intersect It", "Dimension layer must be editable.",
-                                                QgsMessageBar.WARNING, 3)
+                                                Qgis.Warning, 3)
             self.canvas().unsetMapTool(self)
             return
         # unset this tool if the layer is removed
-        self.layer.layerDeleted.connect(self.unsetMapTool)
+        self.layer.willBeDeleted.connect(self.unsetMapTool)
         
         self.editing = False
         self.drawObject = None
@@ -77,7 +79,7 @@ class DimensionEditMapTool(QgsMapTool):
         self.lineRubber.reset()
         if self.layer is not None:
             try:
-                self.layer.layerDeleted.disconnect(self.unsetMapTool)
+                self.layer.willBeDeleted.disconnect(self.unsetMapTool)
             except TypeError:
                 pass
         QgsMapTool.deactivate(self)
@@ -86,7 +88,8 @@ class DimensionEditMapTool(QgsMapTool):
         feature = self.snap_to_dimension_layer(mouseEvent.pos())
         if not feature.isValid():
             return
-        line = feature.geometry().asPolyline()
+        geom = feature.geometry()
+        line = geom.asPolyline() if not geom.isMultipart() else geom.asMultiPolyline()[0]
         point = self.map2layer(mouseEvent.pos())
         if self.observationType == "Distance":
             if len(line) == 0:
@@ -111,8 +114,7 @@ class DimensionEditMapTool(QgsMapTool):
         self.drawObject.setPoint(point)
         geom = self.drawObject.geometry()
 
-        editBuffer = self.layer.editBuffer()
-        editBuffer.changeGeometry(self.featureId, geom)
+        self.layer.changeGeometry(self.featureId, geom)
         self.layer.triggerRepaint()
 
     def canvasMoveEvent(self, mouseEvent):
@@ -131,32 +133,12 @@ class DimensionEditMapTool(QgsMapTool):
 
     def map2layer(self, pos):
         point = self.toMapCoordinates(pos)
-        return self.canvas().mapRenderer().mapToLayerCoordinates(self.layer, point)
+        return self.canvas().mapSettings().mapToLayerCoordinates(self.layer, point)
 
     def snap_to_dimension_layer(self, pos):
-        """ Temporarily override snapping config and snap to vertices and edges
-            of any editable vector layer, to allow selection of node for editing
-            (if snapped to edge, it would offer creation of a new vertex there).
-           """
         map_point = self.toMapCoordinates(pos)
-        tol = QgsTolerance.vertexSearchRadius(self.canvas().mapSettings())
-        snap_type = QgsPointLocator.Type(QgsPointLocator.Edge)
-
-        snap_layers = [QgsSnappingUtils.LayerConfig(self.layer, snap_type, tol, QgsTolerance.ProjectUnits)]
-
-        snap_util = self.canvas().snappingUtils()
-        old_layers = snap_util.layers()
-        old_mode = snap_util.snapToMapMode()
-        old_inter = snap_util.snapOnIntersections()
-        snap_util.setLayers(snap_layers)
-        snap_util.setSnapToMapMode(QgsSnappingUtils.SnapAdvanced)
-        snap_util.setSnapOnIntersections(False)
-        m = snap_util.snapToMap(map_point)
-        snap_util.setLayers(old_layers)
-        snap_util.setSnapToMapMode(old_mode)
-        snap_util.setSnapOnIntersections(old_inter)
-
+        m = snap_to_edge_layer(self.canvas(), map_point, self.layer)
         f = QgsFeature()
-        if m.featureId() is not None:
+        if m.isValid() and m.featureId() >= 0:
             self.layer.getFeatures(QgsFeatureRequest().setFilterFid(m.featureId())).nextFeature(f)
         return f

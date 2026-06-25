@@ -28,7 +28,7 @@
 #---------------------------------------------------------------------
 
 from math import sqrt, fabs, pow, sin, cos, tan, pi
-from qgis.core import QgsPoint
+from qgis.core import QgsPointXY
 
 
 def closestPoint(point, pointList):
@@ -68,8 +68,8 @@ class TwoCirclesIntersection():
         ya = ylt - yrt
         xb = xlt - xrt
         yb = ylt + yrt
-        P1 = QgsPoint(xa, ya)
-        P2 = QgsPoint(xb, yb)
+        P1 = QgsPointXY(xa, ya)
+        P2 = QgsPointXY(xb, yb)
         self.solution = closestPoint(initPoint, [P1, P2])
         self.report = "A solution using two distances has been found.\n\n"
         self.report += "         |       x       |       y       |   radius   |\n"
@@ -108,7 +108,7 @@ class TwoOrientationIntersection():
         k = (x2-x1+(y1-y2)*tan(a2)) / (sin(a1)*(1-tan(a2)/tan(a1)))
         x = x1 + k * sin(a1)
         y = y1 + k * cos(a1)
-        self.solution = QgsPoint(x, y)
+        self.solution = QgsPointXY(x, y)
         self.report = "A solution using two orientations has been found.\n\n"
         self.report += "              |       x       |       y       | azimut |\n"
         self.report += " ------------ | ------------- | ------------- | ------ |\n"
@@ -162,8 +162,8 @@ class DistanceOrientationIntersection():
         y_1 = y2 + k_1*cos(az)
         x_2 = x2 + k_2*sin(az)
         y_2 = y2 + k_2*cos(az)
-        P1 = QgsPoint(x_1, y_1)
-        P2 = QgsPoint(x_2, y_2)
+        P1 = QgsPointXY(x_1, y_1)
+        P2 = QgsPointXY(x_2, y_2)
         self.solution = closestPoint(initPoint, [P1, P2])
         self.report = "A solution using an orientation and a distance has been found.\n\n"
         self.report += "          |       x       |       y       | observation |\n"

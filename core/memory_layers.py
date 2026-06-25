@@ -27,9 +27,8 @@
 #
 # ---------------------------------------------------------------------
 
-from PyQt4.QtCore import Qt
-from qgis.core import QgsMapLayerRegistry, QgsVectorLayer, QgsProject
-from mysettings import MySettings
+from qgis.core import QgsVectorLayer, QgsProject
+from .mysettings import MySettings
 
 
 class MemoryLayers():
@@ -40,59 +39,57 @@ class MemoryLayers():
     def set_layer_visible(self, layer):
         root = QgsProject.instance().layerTreeRoot()
         node = root.findLayer(layer.id())
-        node.setVisible(Qt.Checked)
-        
+        if node is not None:
+            node.setItemVisibilityChecked(True)
+
     def remove_layers(self):
-        try:
-            QgsMapLayerRegistry.instance().removeMapLayer(self.settings.value("memoryLineLayer"))
-            QgsMapLayerRegistry.instance().removeMapLayer(self.settings.value("memoryPointLayer"))
-        except AttributeError:
-            return
-        
+        project = QgsProject.instance()
+        for name in ("memoryLineLayer", "memoryPointLayer"):
+            layer_id = self.settings.value(name)
+            if layer_id:
+                project.removeMapLayer(layer_id)
+
     def clean_layers(self):
         for layer_name in ('memoryLineLayer', 'memoryPointLayer'):
             layer_id = self.settings.value(layer_name)
-            layer = QgsMapLayerRegistry.instance().mapLayer(layer_id)
+            layer = QgsProject.instance().mapLayer(layer_id)
+            if layer is None:
+                continue
             layer.selectAll()
-            fids = layer.selectedFeaturesIds()
+            fids = layer.selectedFeatureIds()
             layer.dataProvider().deleteFeatures(fids)
-            layer.featuresDeleted.emit(fids)
+            layer.removeSelection()
         self.iface.mapCanvas().refresh()
 
     def line_layer(self):
         layer_id = self.settings.value("memoryLineLayer")
-        layer = QgsMapLayerRegistry.instance().mapLayer(layer_id)
+        layer = QgsProject.instance().mapLayer(layer_id)
         if layer is None:
-            epsg = self.iface.mapCanvas().mapRenderer().destinationCrs().authid()
+            epsg = self.iface.mapCanvas().mapSettings().destinationCrs().authid()
             layer = QgsVectorLayer("LineString?crs=%s&field=id:string&field=type:string&field=x:double&field=y:double&field=observation:double&field=precision:double&index=yes" % epsg, "IntersectIt Lines", "memory")
-            QgsMapLayerRegistry.instance().addMapLayer(layer)
-            layer.layerDeleted.connect(self.__line_layer_deleted)
-            layer.featureDeleted.connect(self.__line_layer_feature_deleted)
-            self.settings.setValue("memoryLineLayer", layer.id())
+            QgsProject.instance().addMapLayer(layer)
+            layer.willBeDeleted.connect(self.__line_layer_deleted)
+            self.settings.set_value("memoryLineLayer", layer.id())
         else:
             self.set_layer_visible(layer)
         return layer
 
     def __line_layer_deleted(self):
-        self.settings.setValue("memoryLineLayer", "")
-
-    def __line_layer_feature_deleted(self, fid):
-        # todo: delete corresponding feature in other layer
-        print "hay"
+        self.settings.set_value("memoryLineLayer", "")
 
     def point_layer(self):
         layer_id = self.settings.value("memoryPointLayer")
-        layer = QgsMapLayerRegistry.instance().mapLayer(layer_id)
+        layer = QgsProject.instance().mapLayer(layer_id)
         if layer is None:
-            epsg = self.iface.mapCanvas().mapRenderer().destinationCrs().authid()
+            epsg = self.iface.mapCanvas().mapSettings().destinationCrs().authid()
             layer = QgsVectorLayer("Point?crs=%s&field=id:string&index=yes" % epsg, "IntersectIt Points", "memory")
-            QgsMapLayerRegistry.instance().addMapLayer(layer)
-            layer.layerDeleted.connect(self.__pointLayerDeleted)
-            self.settings.setValue("memoryPointLayer", layer.id())
+            QgsProject.instance().addMapLayer(layer)
+            layer.willBeDeleted.connect(self.__pointLayerDeleted)
+            self.settings.set_value("memoryPointLayer", layer.id())
         else:
             self.set_layer_visible(layer)
         return layer
 
     def __pointLayerDeleted(self):
-        self.settings.setValue("memoryPointLayer", "")
+        self.settings.set_value("memoryPointLayer", "")
 

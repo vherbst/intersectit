@@ -27,9 +27,9 @@
 #
 #---------------------------------------------------------------------
 
-from PyQt4.QtCore import QCoreApplication
-from PyQt4.QtGui import QDialog
-from qgis.core import QGis, QgsGeometry
+from qgis.PyQt.QtCore import QCoreApplication
+from qgis.PyQt.QtWidgets import QDialog
+from qgis.core import QgsWkbTypes, QgsGeometry
 from qgis.gui import QgsRubberBand
 
 from ..qgissettingmanager import SettingDialog, UpdateMode
@@ -47,6 +47,7 @@ class IntersectionDialog(QDialog, Ui_Intersection, SettingDialog):
         self.setupUi(self)
         self.settings = MySettings()
         SettingDialog.__init__(self, self.settings, UpdateMode.NoUpdate)
+        self.init_widgets()
         self.processButton.clicked.connect(self.doIntersection)
         self.okButton.clicked.connect(self.accept)
         self.finished.connect(self.resetRubber)
@@ -56,7 +57,7 @@ class IntersectionDialog(QDialog, Ui_Intersection, SettingDialog):
         self.solution = None
         self.report = ""
 
-        self.rubber = QgsRubberBand(iface.mapCanvas(), QGis.Point)
+        self.rubber = QgsRubberBand(iface.mapCanvas(), QgsWkbTypes.PointGeometry)
         self.rubber.setColor(self.settings.value("rubberColor"))
         self.rubber.setIcon(self.settings.value("rubberIcon"))
         self.rubber.setIconSize(self.settings.value("rubberSize"))
@@ -103,7 +104,7 @@ class IntersectionDialog(QDialog, Ui_Intersection, SettingDialog):
             self.observations = observations
             self.report = intersection.report
             self.okButton.setEnabled(True)
-            self.rubber.setToGeometry(QgsGeometry().fromPoint(self.solution), None)
+            self.rubber.setToGeometry(QgsGeometry.fromPointXY(self.solution), None)
 
 
 

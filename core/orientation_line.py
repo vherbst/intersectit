@@ -27,14 +27,14 @@
 #
 #---------------------------------------------------------------------
 
-from qgis.core import QgsPoint, QgsGeometry
+from qgis.core import QgsPointXY, QgsGeometry
 from math import pi, cos, sin, sqrt
 
 
 class OrientationLine():
     def __init__(self, line, point):
         if len(line) != 2:
-            raise NameError("line must be a vector of 2 QgsPoint")
+            raise NameError("line must be a vector of 2 QgsPointXY")
         self.orientation = line[0].azimuth(line[1]) * pi/180
         self.origin = line[0]
         self.point = point
@@ -47,9 +47,9 @@ class OrientationLine():
         d = sqrt(self.origin.sqrDist(self.point)) * cos(a)
         if d == 0:
             d = 1
-        P = QgsPoint(self.origin.x() + d * sin(self.orientation),
-                     self.origin.y() + d * cos(self.orientation))
-        return QgsGeometry().fromPolyline([self.origin, P])
+        P = QgsPointXY(self.origin.x() + d * sin(self.orientation),
+                       self.origin.y() + d * cos(self.orientation))
+        return QgsGeometry.fromPolylineXY([self.origin, P])
 
 
 

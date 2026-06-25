@@ -28,41 +28,47 @@
 #---------------------------------------------------------------------
 
 
-from PyQt4.QtCore import QUrl, QCoreApplication, QFileInfo, QSettings, QTranslator
-from PyQt4.QtGui import QAction, QIcon, QDesktopServices
-from qgis.core import QgsApplication, QgsMapLayerRegistry
+import os
 
-from core.memory_layers import MemoryLayers
+from qgis.PyQt.QtCore import QUrl, QCoreApplication, QFileInfo, QSettings, QTranslator
+from qgis.PyQt.QtGui import QIcon, QDesktopServices
+from qgis.PyQt.QtWidgets import QAction
 
-from gui.my_settings_dialog import MySettingsDialog
-from gui.dimension_edit_maptool import DimensionEditMapTool
-from gui.distance_maptool import DistanceMapTool
-from gui.orientation_maptool import OrientationMapTool
-from gui.advanced_intersection_maptool import AdvancedIntersectionMapTool
-from gui.simple_intersection_maptool import SimpleIntersectionMapTool
+from .core.memory_layers import MemoryLayers
 
-import resources_rc
+from .gui.my_settings_dialog import MySettingsDialog
+from .gui.dimension_edit_maptool import DimensionEditMapTool
+from .gui.distance_maptool import DistanceMapTool
+from .gui.orientation_maptool import OrientationMapTool
+from .gui.advanced_intersection_maptool import AdvancedIntersectionMapTool
+from .gui.simple_intersection_maptool import SimpleIntersectionMapTool
+
+PLUGIN_DIR = os.path.dirname(__file__)
 
 
-class IntersectIt ():
+def _icon(name):
+    return QIcon(os.path.join(PLUGIN_DIR, "icons", name))
+
+
+class IntersectIt():
     def __init__(self, iface):
         self.iface = iface
         self.mapCanvas = iface.mapCanvas()
 
-        # Initialise the translation environment.
-        userPluginPath = QFileInfo(QgsApplication.qgisUserDbFilePath()).path()+"/python/plugins/intersectit"
-        systemPluginPath = QgsApplication.prefixPath()+"/share/qgis/python/plugins/intersectit"
-        locale = QSettings().value("locale/userLocale")
-        myLocale = locale[0:2]
-        pluginPath = "" # default case
-        if QFileInfo(userPluginPath).exists():
-            pluginPath = '{}/i18n/intersectit_{}.qm'.format(userPluginPath, myLocale)
-        elif QFileInfo(systemPluginPath).exists():
-            pluginPath = '{}/i18n/intersectit_{}.qm'.format(systemPluginPath, myLocale)
-        self.localePath = pluginPath
-        if QFileInfo(self.localePath).exists():
+        # Translation: a plugin-level override takes precedence over the QGIS
+        # locale. This lets the plugin show Lao even when QGIS itself runs in
+        # English (the common case in Laos, where there is no QGIS Lao build).
+        # The override is stored as a String setting under "intersectit/language";
+        # we read it via QSettings directly to avoid importing MySettings (which
+        # transitively pulls in qgis.core) at the very top of __init__.
+        from qgis.PyQt.QtCore import QSettings as _QS
+        override = _QS().value("intersectit/language", "", type=str)
+        qgis_locale = _QS().value("locale/userLocale") or ""
+        myLocale = override[0:2] if override else qgis_locale[0:2]
+        qm_path = os.path.join(PLUGIN_DIR, "i18n", "intersectit_{}.qm".format(myLocale))
+        if myLocale and QFileInfo(qm_path).exists():
             self.translator = QTranslator()
-            self.translator.load(self.localePath)
+            self.translator.load(qm_path)
             QCoreApplication.installTranslator(self.translator)
 
     def initGui(self):
@@ -70,12 +76,12 @@ class IntersectIt ():
         self.toolBar.setObjectName("IntersectIt")
 
         # settings
-        self.uisettingsAction = QAction(QIcon(":/plugins/intersectit/icons/settings.svg"),
+        self.uisettingsAction = QAction(_icon("settings.svg"),
                                         QCoreApplication.translate("IntersectIt", "settings"), self.iface.mainWindow())
         self.uisettingsAction.triggered.connect(self.showSettings)
         self.iface.addPluginToMenu("&Intersect It", self.uisettingsAction)
         # distance
-        self.distanceAction = QAction(QIcon(":/plugins/intersectit/icons/distance.svg"),
+        self.distanceAction = QAction(_icon("distance.svg"),
                                       QCoreApplication.translate("IntersectIt", "place distance"), self.iface.mainWindow())
         self.distanceAction.setCheckable(True)
         self.distanceMapTool = DistanceMapTool(self.iface)
@@ -83,7 +89,7 @@ class IntersectIt ():
         self.toolBar.addAction(self.distanceAction)
         self.iface.addPluginToMenu("&Intersect It", self.distanceAction)
         # prolongation
-        self.orientationAction = QAction(QIcon(":/plugins/intersectit/icons/prolongation.svg"),
+        self.orientationAction = QAction(_icon("prolongation.svg"),
                                          QCoreApplication.translate("IntersectIt", "place orientation"),
                                          self.iface.mainWindow())
         self.orientationAction.setCheckable(True)
@@ -94,7 +100,7 @@ class IntersectIt ():
         # separator
         self.toolBar.addSeparator()
         # simple intersection
-        self.simpleIntersectionAction = QAction(QIcon(":/plugins/intersectit/icons/intersection_simple.svg"),
+        self.simpleIntersectionAction = QAction(_icon("intersection_simple.svg"),
                                                 QCoreApplication.translate("IntersectIt", "simple intersection of 2 objects"),
                                                 self.iface.mainWindow())
         self.simpleIntersectionAction.setCheckable(True)
@@ -103,7 +109,7 @@ class IntersectIt ():
         self.toolBar.addAction(self.simpleIntersectionAction)
         self.iface.addPluginToMenu("&Intersect It", self.simpleIntersectionAction)
         # advanced intersection
-        self.advancedIntersectionAction = QAction(QIcon(":/plugins/intersectit/icons/intersection_advanced.svg"),
+        self.advancedIntersectionAction = QAction(_icon("intersection_advanced.svg"),
                                                   QCoreApplication.translate("IntersectIt", "advanced intersection of 2+ observations"),
                                                   self.iface.mainWindow())
         self.advancedIntersectionAction.setCheckable(True)
@@ -114,7 +120,7 @@ class IntersectIt ():
         # separator
         self.toolBar.addSeparator()
         # dimension distance edit
-        self.dimensionDistanceAction = QAction(QIcon(":/plugins/intersectit/icons/dimension_distance.svg"),
+        self.dimensionDistanceAction = QAction(_icon("dimension_distance.svg"),
                                                QCoreApplication.translate("IntersectIt", "edit distance dimension"),
                                                self.iface.mainWindow())
         self.dimensionDistanceAction.setCheckable(True)
@@ -123,7 +129,7 @@ class IntersectIt ():
         self.toolBar.addAction(self.dimensionDistanceAction)
         self.iface.addPluginToMenu("&Intersect It", self.dimensionDistanceAction)
         # dimension orientation edit
-        self.dimensionOrientationAction = QAction(QIcon(":/plugins/intersectit/icons/dimension_orientation.svg"),
+        self.dimensionOrientationAction = QAction(_icon("dimension_orientation.svg"),
                                                   QCoreApplication.translate("IntersectIt", "edit orientation dimension"),
                                                   self.iface.mainWindow())
         self.dimensionOrientationAction.setCheckable(True)
@@ -134,14 +140,14 @@ class IntersectIt ():
         # separator
         self.toolBar.addSeparator()
         # cleaner
-        self.cleanerAction = QAction(QIcon(":/plugins/intersectit/icons/eraser.svg"),
+        self.cleanerAction = QAction(_icon("eraser.svg"),
                                      QCoreApplication.translate("IntersectIt", "erase construction features"),
                                      self.iface.mainWindow())
         self.cleanerAction.triggered.connect(self.clean_memory_layers)
         self.toolBar.addAction(self.cleanerAction)
         self.iface.addPluginToMenu("&Intersect It", self.cleanerAction)
         # help
-        self.helpAction = QAction(QIcon(":/plugins/intersectit/icons/help.svg"),
+        self.helpAction = QAction(_icon("help.svg"),
                                   QCoreApplication.translate("IntersectIt", "help"), self.iface.mainWindow())
         self.helpAction.triggered.connect(self.help)
         self.iface.addPluginToMenu("&Intersect It", self.helpAction)
@@ -191,4 +197,4 @@ class IntersectIt ():
         MemoryLayers(self.iface).clean_layers()
 
     def showSettings(self):
-        MySettingsDialog().exec_()
+        MySettingsDialog().exec()
